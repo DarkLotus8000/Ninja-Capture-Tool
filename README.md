@@ -1,6 +1,6 @@
 # Ninja Capture Tool
 
-Capture Warframe CDN responses for OpenWF. Can be used to make update patches or capture stripped assets.
+Capture Warframe CDN responses for OpenWF. Can be used to make **Update Patches** or capture **Stripped Assets**.
 
 ## Requirements
 
@@ -28,7 +28,7 @@ Don't use Process Monitor while using Local Capture, to prevent crashing. If Loc
 
 Persistent settings are stored in `config.json`; command-line options override them for the current run.
 
-For an **Update Patch**, start from the original, unupdated Steam manifest base for that content update and make sure to download files for all languages & DirectX versions by changing the launcher settings and letting it finish downloading. Capturing stripped assets from an already updated installation does not require an original Steam base. If needed, a registered base can be checked first with [Ninja Patch Tool's `verify_base`](https://github.com/DarkLotus8000/Ninja-Patch-Tool#verify-a-base) command.
+For an **Update Patch**, start from the original, unupdated Steam manifest base for that content update and make sure to download files for all languages & DirectX versions by changing the launcher settings and letting it finish downloading. Capturing **Stripped Assets** from an already updated installation does not require an original Steam base. If needed, a registered base can be checked first with [Ninja Patch Tool's `verify_base`](https://github.com/DarkLotus8000/Ninja-Patch-Tool#verify-a-base) command.
 
 ## Options
 
