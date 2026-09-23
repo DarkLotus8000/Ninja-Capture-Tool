@@ -1919,6 +1919,47 @@ class SessionTests(NctTestBase):
         self.assertEqual(calls[1], f"System Proxy - Ninja Capture Tool (v{common.display_version()})")
         self.assertEqual(calls[-1], "Original Title")
 
+    def test_suspend_console_quick_edit_restores_original_mode_after_startup_scope(self) -> None:
+        original_mode = 0x00E7
+        calls: list[tuple[int, int]] = []
+
+        class Function:
+            def __init__(self, callback):
+                self.callback = callback
+                self.argtypes = None
+                self.restype = None
+
+            def __call__(self, *args):
+                return self.callback(*args)
+
+        class Kernel32:
+            def __init__(self):
+                self.GetStdHandle = Function(lambda identifier: 123)
+                self.GetConsoleMode = Function(self.get_console_mode)
+                self.SetConsoleMode = Function(self.set_console_mode)
+
+            @staticmethod
+            def get_console_mode(handle, mode):
+                mode._obj.value = original_mode
+                return 1
+
+            @staticmethod
+            def set_console_mode(handle, mode):
+                value = int(getattr(mode, "value", mode))
+                calls.append((int(getattr(handle, "value", handle)), value))
+                return 1
+
+        with (
+            mock.patch.object(nct.sys, "platform", "win32"),
+            mock.patch.object(nct.ctypes, "WinDLL", return_value=Kernel32(), create=True),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "startup failed"):
+                with nct_runtime.suspend_console_quick_edit():
+                    self.assertEqual(calls, [(123, original_mode & ~0x0040)])
+                    raise RuntimeError("startup failed")
+
+        self.assertEqual(calls, [(123, original_mode & ~0x0040), (123, original_mode)])
+
     def test_show_console_window_marks_only_allocated_console_as_nct_created(self) -> None:
         with (
             mock.patch.object(nct.sys, "platform", "win32"),
@@ -3197,6 +3238,87 @@ class SessionTests(NctTestBase):
         self.assertIn(99, handlers)
         with self.assertRaises(KeyboardInterrupt):
             handlers[99](99, None)
+
+    def test_main_suspends_quick_edit_from_console_start_through_worker_ready(self) -> None:
+        events: list[str] = []
+        options = dict(nct_config.DEFAULT_CONFIG, capture_mode="local", output_root=Path("output"), output_path=None)
+        config = dict(nct_config.DEFAULT_CONFIG)
+        session = mock.Mock()
+        session.end_reason = None
+        session.failed = False
+        session.start.side_effect = lambda: events.append("session-start")
+        session.wait.side_effect = lambda: events.append("session-wait")
+        session.cleanup.side_effect = lambda: events.append("cleanup")
+
+        @contextlib.contextmanager
+        def suspend_quick_edit():
+            events.append("quickedit-enter")
+            try:
+                yield
+            finally:
+                events.append("quickedit-exit")
+
+        with (
+            mock.patch.object(nct.sys, "platform", "win32"),
+            mock.patch.object(nct, "handle_early_update_request", return_value=None),
+            mock.patch.object(elevation, "is_elevated", return_value=True),
+            mock.patch.object(elevation, "elevation_task_is_current", return_value=True),
+            mock.patch.object(nct, "capture_lock", side_effect=contextlib.nullcontext),
+            mock.patch.object(nct, "_restore_interrupted_system_proxy"),
+            mock.patch.object(nct, "_warn_stale_update_recovery_backups"),
+            mock.patch.object(nct, "_load_startup_config_and_options", return_value=(config, None, options)),
+            mock.patch.object(nct_runtime, "show_console_window", side_effect=lambda: events.append("show-console")),
+            mock.patch.object(nct_runtime, "suspend_console_quick_edit", side_effect=suspend_quick_edit),
+            mock.patch.object(
+                nct_config,
+                "clean_duplicate_config_processes",
+                side_effect=lambda *args, **kwargs: (events.append("clean-duplicates") or (0, None)),
+            ),
+            mock.patch.object(nct_runtime, "set_console_title", side_effect=lambda mode: events.append("set-title")),
+            mock.patch.object(
+                nct_runtime,
+                "ensure_local_capture_compatible",
+                side_effect=lambda runtime_options: events.append("compatibility"),
+            ),
+            mock.patch.object(
+                nct,
+                "handle_automatic_update",
+                side_effect=lambda *args, **kwargs: (events.append("auto-update") or None),
+            ),
+            mock.patch.object(
+                nct,
+                "validate_mitmproxy_installation",
+                side_effect=lambda: events.append("validate-mitmproxy"),
+            ),
+            mock.patch.object(
+                nct,
+                "validate_windows_capture_package",
+                side_effect=lambda: events.append("validate-package"),
+            ),
+            mock.patch.object(nct, "CaptureSession", return_value=session),
+            mock.patch.object(session, "enable_config_reload"),
+            mock.patch.object(nct.atexit, "register"),
+            mock.patch.object(nct, "install_termination_handlers"),
+        ):
+            self.assertEqual(nct.main([]), 0)
+
+        self.assertEqual(
+            events,
+            [
+                "show-console",
+                "quickedit-enter",
+                "clean-duplicates",
+                "set-title",
+                "compatibility",
+                "auto-update",
+                "validate-mitmproxy",
+                "validate-package",
+                "session-start",
+                "quickedit-exit",
+                "session-wait",
+                "cleanup",
+            ],
+        )
 
     def test_main_returns_failure_for_fatal_worker_message(self) -> None:
         for mode in ("local", "system-proxy"):

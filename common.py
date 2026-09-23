@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 def display_version(version: str = VERSION) -> str:
     parts = version.split(".")

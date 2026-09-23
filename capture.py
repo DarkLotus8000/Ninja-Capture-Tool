@@ -2664,7 +2664,6 @@ class CaptureAddon:
         with self._session_lock:
             self.store.abort_all()
 
-
 def run_frozen_capture_smoke_test() -> int:
     """Exercise the bundled CaptureWriter path inside the frozen executable."""
     with tempfile.TemporaryDirectory(prefix="nct-capture-smoke-") as tmp:

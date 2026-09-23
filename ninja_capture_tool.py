@@ -841,50 +841,60 @@ def main(argv: list[str] | None = None) -> int:
 
                 mode = str(options["capture_mode"])
                 nct_runtime.show_console_window()
-                duplicate_count, cleaned_config_signature = nct_config.clean_duplicate_config_processes(
-                    nct_config.CONFIG_FILE,
-                    expected_signature=startup_config_signature,
-                )
-                if cleaned_config_signature is not None:
-                    startup_config_signature = cleaned_config_signature
-                if duplicate_count:
-                    print_console("")
-                nct_runtime.set_console_title(mode)
-                nct_runtime.ensure_local_capture_compatible(options)
-                update_result = handle_automatic_update(
-                    args, actual_argv, bool(config["auto_update"])
-                )
-                if update_result is not None:
-                    return update_result
-
-                validate_mitmproxy_installation()
-                validate_windows_capture_package()
-
-                setup_messages = list(task_setup_messages)
-                if task_installed_now:
-                    setup_messages.insert(0, "Elevation task installed successfully.")
-                session = CaptureSession(
-                    options,
-                    setup_messages or None,
-                )
-                session.enable_config_reload(
-                    args,
-                    initial_signature=startup_config_signature,
-                )
-                atexit.register(session.cleanup)
-                install_termination_handlers(session)
+                session = None
                 try:
-                    session.start()
+                    # Classic Windows QuickEdit can pause any synchronous console write. Suspend
+                    # it from the moment the capture console becomes visible until the worker is
+                    # fully ready, then restore the user's exact original console mode. Once the
+                    # worker is active, its output is already decoupled from console rendering.
+                    with nct_runtime.suspend_console_quick_edit():
+                        duplicate_count, cleaned_config_signature = nct_config.clean_duplicate_config_processes(
+                            nct_config.CONFIG_FILE,
+                            expected_signature=startup_config_signature,
+                        )
+                        if cleaned_config_signature is not None:
+                            startup_config_signature = cleaned_config_signature
+                        if duplicate_count:
+                            print_console("")
+                        nct_runtime.set_console_title(mode)
+                        nct_runtime.ensure_local_capture_compatible(options)
+                        update_result = handle_automatic_update(
+                            args, actual_argv, bool(config["auto_update"])
+                        )
+                        if update_result is not None:
+                            return update_result
+
+                        validate_mitmproxy_installation()
+                        validate_windows_capture_package()
+
+                        setup_messages = list(task_setup_messages)
+                        if task_installed_now:
+                            setup_messages.insert(0, "Elevation task installed successfully.")
+                        session = CaptureSession(
+                            options,
+                            setup_messages or None,
+                        )
+                        session.enable_config_reload(
+                            args,
+                            initial_signature=startup_config_signature,
+                        )
+                        atexit.register(session.cleanup)
+                        install_termination_handlers(session)
+                        session.start()
                     session.wait()
                 except KeyboardInterrupt:
+                    if session is None:
+                        raise
                     if session.end_reason is None:
                         session.end_reason = "ctrl_c"
                 except Exception as exc:
-                    session.failed = True
-                    session.failure_reason = str(exc)
+                    if session is not None:
+                        session.failed = True
+                        session.failure_reason = str(exc)
                     raise
                 finally:
-                    session.cleanup()
+                    if session is not None:
+                        session.cleanup()
                 if session.failed is True:
                     return 1
         except CaptureBusyError:

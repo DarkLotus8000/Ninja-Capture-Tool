@@ -997,7 +997,7 @@ class BuildReleaseTests(NctTestBase):
             modified.write_text("locally modified", encoding="utf-8")
 
             (stage / "NinjaCaptureTool.exe").write_bytes(b"new")
-            self._write_stage_release_manifest(stage, "1.0.0")
+            self._write_stage_release_manifest(stage, common.VERSION)
             backup, changes = update.install_staged_release(stage, install, common.VERSION)
 
             self.assertFalse(obsolete.exists())

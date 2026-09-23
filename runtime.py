@@ -11,6 +11,7 @@ import ssl
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from ctypes import wintypes
 from pathlib import Path
 
@@ -574,6 +575,48 @@ def _restore_console_title() -> None:
 
 def console_was_created_by_nct() -> bool:
     return _CONSOLE_CREATED_BY_NCT
+
+@contextmanager
+def suspend_console_quick_edit():
+    """Temporarily prevent classic QuickEdit selection from pausing startup writes."""
+    if sys.platform != "win32":
+        yield
+        return
+
+    kernel32 = None
+    input_handle = None
+    original_mode: int | None = None
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetStdHandle.argtypes = [wintypes.DWORD]
+        kernel32.GetStdHandle.restype = wintypes.HANDLE
+        kernel32.GetConsoleMode.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel32.GetConsoleMode.restype = wintypes.BOOL
+        kernel32.SetConsoleMode.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        kernel32.SetConsoleMode.restype = wintypes.BOOL
+
+        input_handle = kernel32.GetStdHandle((-10) & 0xFFFFFFFF)
+        if input_handle and input_handle != ctypes.c_void_p(-1).value:
+            mode = wintypes.DWORD()
+            if kernel32.GetConsoleMode(input_handle, ctypes.byref(mode)):
+                quick_edit = 0x0040
+                extended_flags = 0x0080
+                suspended_mode = (int(mode.value) | extended_flags) & ~quick_edit
+                if suspended_mode != int(mode.value) and kernel32.SetConsoleMode(input_handle, suspended_mode):
+                    original_mode = int(mode.value)
+    except (AttributeError, OSError, ValueError):
+        kernel32 = None
+        input_handle = None
+        original_mode = None
+
+    try:
+        yield
+    finally:
+        if kernel32 is not None and input_handle is not None and original_mode is not None:
+            try:
+                kernel32.SetConsoleMode(input_handle, original_mode)
+            except (AttributeError, OSError, ValueError):
+                pass
 
 def set_console_title(capture_mode: str | None = None) -> None:
     global _CONSOLE_TITLE_ORIGINAL, _CONSOLE_TITLE_SET
