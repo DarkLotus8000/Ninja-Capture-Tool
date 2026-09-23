@@ -685,13 +685,15 @@ class SteamTrackingTests(NctTestBase):
         process.poll.return_value = None
         process.wait.side_effect = [subprocess.TimeoutExpired("worker", 0.0), 0]
         process.communicate.return_value = ("", "")
-        steam_tracking.terminate_steam_query_subprocess(process, timeout=0.0)
+        with mock.patch.object(steam_tracking, "_close_steam_worker_kill_job") as close_job:
+            steam_tracking.terminate_steam_query_subprocess(process, timeout=0.0)
         self.assertEqual(
             process.wait.call_args_list,
             [mock.call(timeout=0.0), mock.call(timeout=0.1)],
         )
         process.communicate.assert_called_once_with(timeout=0.1)
         process.kill.assert_called_once_with()
+        close_job.assert_called_once_with(process)
 
     def test_live_query_error_normalization_collapses_embedded_newlines(self) -> None:
         raw = "[WinError 10053] Eine bestehende Verbindung wurde softwaregesteuert\r\n\r\ndurch den Hostcomputer abgebrochen"
