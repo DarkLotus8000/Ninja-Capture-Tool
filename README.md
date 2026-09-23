@@ -5,7 +5,7 @@ Capture Warframe CDN responses for OpenWF. Can be used to make **Update Patches*
 ## Requirements
 
 - Windows 10 (64-bit) or newer
-- Python 3.14 (not required for release executables)
+- Python 3.14 (not required for release executable)
 
 May not work on other operating systems through Wine.
 
