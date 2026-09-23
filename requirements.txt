@@ -1,0 +1,2 @@
+mitmproxy==12.2.3
+pysteam-client[client]==1.8.2

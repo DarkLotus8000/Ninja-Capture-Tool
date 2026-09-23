@@ -1,0 +1,16 @@
+{
+    "capture_mode": "local",
+    "processes": [
+        "Launcher.exe",
+        "Warframe.x64.exe"
+    ],
+    "stop_on_exit": false,
+    "stop_on_exit_delay": 15,
+    "proxy_port": 8080,
+    "debug": false,
+    "output_root": "output",
+    "name_session_after_warframe_version": false,
+    "live_check_interval_seconds": 300,
+    "upstream_proxy": "auto",
+    "auto_update": true
+}

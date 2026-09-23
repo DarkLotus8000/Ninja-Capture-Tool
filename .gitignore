@@ -1,0 +1,45 @@
+# Captured sessions
+output/
+
+# Generated releases
+release/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Coverage artifacts
+.coverage
+coverage.xml
+htmlcov/
+
+# Release build working directory
+release_temp/
+
+# Portable runtime cache
+data/warframe_version.json
+data/update_state.json
+
+# Disposable updater workspace
+temp/
+
+# Transient installation lock used by the updater/build barrier
+data/.update.lock
+
+# Temporary files
+*.tmp
+*.part
+*.spec
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# IDE settings
+.vscode/
+.idea/
+.vs/

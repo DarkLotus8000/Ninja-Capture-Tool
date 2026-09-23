@@ -1,0 +1,13 @@
+* text=auto
+
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.sha256 text eol=lf
+*.txt text eol=crlf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+*.exe binary
+*.ico binary
+*.zip binary
