@@ -717,19 +717,21 @@ def terminate_steam_query_subprocess(process: subprocess.Popen, *, timeout: floa
         process.terminate()
     except OSError:
         pass
+    wait_timeout = max(0.0, timeout)
+    kill_timeout = min(0.5, max(0.1, wait_timeout))
     try:
-        process.wait(timeout=max(0.0, timeout))
+        process.wait(timeout=wait_timeout)
     except subprocess.TimeoutExpired:
         try:
             process.kill()
         except OSError:
             pass
         try:
-            process.wait(timeout=0.5)
+            process.wait(timeout=kill_timeout)
         except (OSError, subprocess.TimeoutExpired):
             pass
     try:
-        stdout, _ = process.communicate(timeout=0.1)
+        stdout, _ = process.communicate(timeout=min(0.1, kill_timeout))
     except (OSError, subprocess.TimeoutExpired):
         stdout = ""
     finally:

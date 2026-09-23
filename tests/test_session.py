@@ -1791,6 +1791,39 @@ class SessionTests(NctTestBase):
             self.assertFalse(log_path.exists())
             self.assertFalse(manifest_path.exists())
 
+    def test_console_close_removes_filtered_only_session_and_temp_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            options = dict(nct_config.DEFAULT_CONFIG, output_root=root, output_path=None)
+            session = nct.CaptureSession(options)
+            session.session_root = common.create_session_directory(root)
+            session.log_path, session.manifest_path = common.session_artifact_paths(
+                root, session.session_root.name
+            )
+            capture.initialize_session_manifest(session.session_root, options, session.manifest_path)
+            manifest = common.read_json_object(session.manifest_path)
+            manifest["filtered_root_paths"] = 3
+            common.atomic_write_json(session.manifest_path, manifest)
+            session.temp_root = common.prepare_capture_temp_root(root)
+            assert session.log_path is not None and session.manifest_path is not None
+            session_root = session.session_root
+            temp_root = session.temp_root
+            log_path = session.log_path
+            manifest_path = session.manifest_path
+            session.logger = nct_session.SessionLogger(log_path)
+            session.started = True
+            session.request_console_shutdown()
+            with (
+                mock.patch.object(session, "_stop_worker", return_value=True),
+                mock.patch.object(session, "_finalize_worker_state", return_value=True),
+            ):
+                session.cleanup()
+
+            self.assertFalse(temp_root.exists())
+            self.assertFalse(session_root.exists())
+            self.assertFalse(log_path.exists())
+            self.assertFalse(manifest_path.exists())
+
     def test_console_close_preserves_preexisting_empty_exact_output_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2161,7 +2194,7 @@ class SessionTests(NctTestBase):
         ):
             session.cleanup()
         stop_worker.assert_called_once_with(fast=True)
-        finalize_worker.assert_called_once_with(timeout=0.5)
+        finalize_worker.assert_called_once_with(timeout=0.25)
         self.assertTrue(session.shutdown_complete.is_set())
 
     def test_ctrl_c_console_event_requests_normal_cleanup_instead_of_default_exit(self) -> None:
@@ -2196,8 +2229,8 @@ class SessionTests(NctTestBase):
         process = mock.Mock()
         process.poll.return_value = None
         process.wait.side_effect = [
-            subprocess.TimeoutExpired("worker", 0.5),
-            subprocess.TimeoutExpired("worker", 0.5),
+            subprocess.TimeoutExpired("worker", 0.2),
+            subprocess.TimeoutExpired("worker", 0.2),
             0,
         ]
         session.process = process
@@ -2213,9 +2246,9 @@ class SessionTests(NctTestBase):
         self.assertEqual(close_job.call_args_list[0], mock.call("job"))
         self.assertEqual(
             process.wait.call_args_list,
-            [mock.call(timeout=0.5), mock.call(timeout=0.5), mock.call(timeout=0.5)],
+            [mock.call(timeout=0.2), mock.call(timeout=0.2), mock.call(timeout=0.2)],
         )
-        taskkill.assert_called_once_with(process, timeout=0.5)
+        taskkill.assert_called_once_with(process, timeout=0.3)
         process.kill.assert_not_called()
         self.assertIsNone(session.worker_job)
 
@@ -2234,7 +2267,7 @@ class SessionTests(NctTestBase):
             session._stop_worker(fast=True)
         process.stdin.write.assert_called_once_with(common.encode_worker_message("shutdown") + "\n")
         process.stdin.flush.assert_called_once_with()
-        process.wait.assert_called_once_with(timeout=0.5)
+        process.wait.assert_called_once_with(timeout=0.2)
         taskkill.assert_not_called()
         process.kill.assert_not_called()
         close_job.assert_called_once_with("job")
@@ -2244,7 +2277,7 @@ class SessionTests(NctTestBase):
         session = nct.CaptureSession(dict(nct_config.DEFAULT_CONFIG, output_root=Path("C:/output"), output_path=None))
         process = mock.Mock()
         process.poll.return_value = None
-        process.wait.side_effect = subprocess.TimeoutExpired("worker", 0.5)
+        process.wait.side_effect = subprocess.TimeoutExpired("worker", 0.2)
         session.process = process
         session.worker_job = "job"
         with (
@@ -2301,7 +2334,7 @@ class SessionTests(NctTestBase):
         self.assertTrue(session.cleaned_up)
         self.assertTrue(session.shutdown_complete.is_set())
         self.assertEqual(stop_worker.call_args_list, [mock.call(fast=True), mock.call(fast=True)])
-        finalize_worker.assert_called_once_with(timeout=0.5)
+        finalize_worker.assert_called_once_with(timeout=0.25)
         finalize_metadata.assert_called_once_with()
         remove_temp.assert_called_once_with(session.temp_root)
         finish_manifest.assert_called_once_with(finalized_manifest, check_payload=True)

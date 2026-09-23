@@ -2396,7 +2396,7 @@ class CaptureSession(LiveTrackingMixin):
         # race from the same error emitted by a live/replacement worker.
         with self.worker_retirement_lock:
             self.retiring_worker_ids.add(id(process))
-        if self._request_worker_shutdown(0.5 if fast else 3.0):
+        if self._request_worker_shutdown(0.2 if fast else 3.0):
             runtime.close_worker_job(self.worker_job)
             self.worker_job = None
             return True
@@ -2407,13 +2407,13 @@ class CaptureSession(LiveTrackingMixin):
             runtime.close_worker_job(self.worker_job)
             self.worker_job = None
             try:
-                process.wait(timeout=0.5 if fast else 1.5)
+                process.wait(timeout=0.2 if fast else 1.5)
                 return True
             except (OSError, subprocess.TimeoutExpired):
                 pass
 
         if sys.platform == "win32":
-            runtime.terminate_process_tree(process, timeout=0.5 if fast else 2.0)
+            runtime.terminate_process_tree(process, timeout=0.3 if fast else 2.0)
         else:
             try:
                 process.terminate()
@@ -2421,7 +2421,7 @@ class CaptureSession(LiveTrackingMixin):
                 pass
 
         try:
-            process.wait(timeout=0.5 if fast else 1.0)
+            process.wait(timeout=0.2 if fast else 1.0)
             return True
         except (OSError, subprocess.TimeoutExpired):
             pass
@@ -2433,7 +2433,7 @@ class CaptureSession(LiveTrackingMixin):
         except OSError:
             pass
         try:
-            process.wait(timeout=0.75 if fast else 1.5)
+            process.wait(timeout=0.25 if fast else 1.5)
             return True
         except (OSError, subprocess.TimeoutExpired):
             return process.poll() is not None
@@ -2565,7 +2565,7 @@ class CaptureSession(LiveTrackingMixin):
                     self.log(f"[Recovery] Recovery data was kept at: {common.proxy_recovery_file()}")
 
             worker_stopped = self._stop_worker(fast=closing)
-            worker_finalized = worker_stopped and self._finalize_worker_state(timeout=0.5 if closing else 1.5)
+            worker_finalized = worker_stopped and self._finalize_worker_state(timeout=0.25 if closing else 1.5)
             if not worker_finalized:
                 # Do not finalize metadata, remove temporary capture data, close
                 # worker pipes, or discard rotation state while the worker may still

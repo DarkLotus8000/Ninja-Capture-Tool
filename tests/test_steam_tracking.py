@@ -533,6 +533,16 @@ class SteamTrackingTests(NctTestBase):
         self.assertIs(session.warframe_status_process, process)
         start.assert_called_once_with(timeout=30.0, entry_script=common.TOOL_DIR / "ninja_capture_tool.py")
 
+    def test_console_close_stops_warframe_status_worker_without_grace_wait(self) -> None:
+        options = dict(nct_config.DEFAULT_CONFIG, output_root=Path("output"), output_path=None)
+        session = nct.CaptureSession(options)
+        process = FakeSteamQueryProcess(running=True)
+        session.warframe_status_process = process
+        session.console_closing = True
+        with mock.patch.object(live_tracking, "terminate_warframe_query_subprocess") as terminate:
+            session._stop_warframe_status_query()
+        terminate.assert_called_once_with(process, timeout=0.0)
+
     def test_warframe_status_watchdog_uses_cached_version_and_allows_replacement(self) -> None:
         options = dict(nct_config.DEFAULT_CONFIG, output_root=Path("output"), output_path=None)
         session = nct.CaptureSession(options)
@@ -587,6 +597,16 @@ class SteamTrackingTests(NctTestBase):
         self.assertLess(elapsed, 0.25)
         self.assertIs(session.steam_status_process, process)
         start.assert_called_once_with(timeout=30.0, entry_script=common.TOOL_DIR / "ninja_capture_tool.py")
+
+    def test_console_close_stops_steam_status_worker_without_grace_wait(self) -> None:
+        options = dict(nct_config.DEFAULT_CONFIG, output_root=Path("output"), output_path=None)
+        session = nct.CaptureSession(options)
+        process = FakeSteamQueryProcess(running=True)
+        session.steam_status_process = process
+        session.console_closing = True
+        with mock.patch.object(live_tracking, "terminate_steam_query_subprocess") as terminate:
+            session._stop_steam_status_query()
+        terminate.assert_called_once_with(process, timeout=0.0)
 
     def test_steam_status_watchdog_kills_timed_out_worker_and_allows_replacement(self) -> None:
         options = dict(nct_config.DEFAULT_CONFIG, output_root=Path("output"), output_path=None)
@@ -659,6 +679,19 @@ class SteamTrackingTests(NctTestBase):
         self.assertIn("timed out after 0.01 seconds during anonymous login", debug_lines[0])
         self.assertIn("using cached manifest 4895911296145320793 (52.0 GiB)", debug_lines[0])
         self.assertFalse(any("Direct live query failure detail" in line for line in session.pending_live_status_log_messages))
+
+    def test_query_worker_zero_timeout_uses_short_kill_wait(self) -> None:
+        process = mock.Mock()
+        process.poll.return_value = None
+        process.wait.side_effect = [subprocess.TimeoutExpired("worker", 0.0), 0]
+        process.communicate.return_value = ("", "")
+        steam_tracking.terminate_steam_query_subprocess(process, timeout=0.0)
+        self.assertEqual(
+            process.wait.call_args_list,
+            [mock.call(timeout=0.0), mock.call(timeout=0.1)],
+        )
+        process.communicate.assert_called_once_with(timeout=0.1)
+        process.kill.assert_called_once_with()
 
     def test_live_query_error_normalization_collapses_embedded_newlines(self) -> None:
         raw = "[WinError 10053] Eine bestehende Verbindung wurde softwaregesteuert\r\n\r\ndurch den Hostcomputer abgebrochen"

@@ -259,7 +259,7 @@ class LiveTrackingMixin:
             self.warframe_status_checked_at = None
             self.warframe_status_pending_announce = False
         if process is not None:
-            terminate_warframe_query_subprocess(process, timeout=0.25 if self.console_closing else 1.0)
+            terminate_warframe_query_subprocess(process, timeout=0.0 if self.console_closing else 1.0)
 
     def _load_persisted_steam_tracking_state(self, messages: list[tuple[str, str]]) -> None:
         if self.steam_tracking_state_loaded:
@@ -789,7 +789,7 @@ class LiveTrackingMixin:
             self.steam_status_pending_announce = False
             self.steam_status_pending_content_update = False
         if process is not None:
-            terminate_steam_query_subprocess(process, timeout=0.25 if self.console_closing else 1.0)
+            terminate_steam_query_subprocess(process, timeout=0.0 if self.console_closing else 1.0)
 
     def _record_live_status_log(self, message: str) -> None:
         if self.logger is None:
